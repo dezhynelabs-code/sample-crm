@@ -658,3 +658,116 @@ input:checked + .slider:before { transform: translateX(22px); }
   .content { padding: 20px; }
   .table { display: block; overflow-x: auto; white-space: nowrap; }
 }
+
+/* ===========================================================
+   Login Screen
+   =========================================================== */
+.login-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--color-mist);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: opacity var(--motion-panel), visibility var(--motion-panel);
+}
+.login-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.login-card {
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  padding: 40px;
+  width: 100%;
+  max-width: 440px;
+  text-align: center;
+  animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.login-logo h2 {
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--color-ink);
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+.login-subtitle {
+  color: var(--color-slate);
+  font-size: 13.5px;
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+.login-profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--motion-fast), background var(--motion-fast), transform var(--motion-fast);
+}
+.login-profile-btn:hover {
+  border-color: var(--color-accent);
+  background: var(--color-mist);
+  transform: translateY(-2px);
+}
+.login-profile-btn:active {
+  transform: translateY(0);
+}
+.profile-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: white;
+  flex-shrink: 0;
+}
+.admin-avatar { background: var(--color-accent); }
+.manager-avatar { background: var(--status-progress); }
+.exec-avatar { background: var(--status-new); }
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.profile-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-ink);
+}
+.profile-email {
+  font-size: 12px;
+  color: var(--color-slate);
+}
+
+/* Collapsed Logout button styles */
+.sidebar.collapsed .logout-label,
+.sidebar:not(.force-open) .logout-label {
+  display: none;
+}
+.sidebar.collapsed #logoutBtn,
+.sidebar:not(.force-open) #logoutBtn {
+  padding: 10px 0;
+  justify-content: center;
+}

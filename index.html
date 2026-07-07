@@ -6,7 +6,7 @@
 <title>CRM — Admin Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=3" />
+<link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
 
@@ -75,12 +75,10 @@
         </div>
       </div>
       <div class="role-switcher-wrap">
-        <label class="role-switcher-label" for="roleSwitcher">Viewing as</label>
-        <select id="roleSwitcher" class="role-switcher-select">
-          <option value="ADMIN">Administrator</option>
-          <option value="MANAGER">Sales Manager</option>
-          <option value="SALES_EXEC">Sales Executive</option>
-        </select>
+        <button id="logoutBtn" class="btn btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <span>⎋</span>
+          <span class="logout-label">Log Out</span>
+        </button>
       </div>
     </div>
   </aside>
@@ -663,6 +661,55 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<script src="app.js?v=3"></script>
+<!-- Login Screen Overlay -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg class="logo-svg" style="width: 48px; height: 48px; margin: 0 auto 16px;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="logoGradLarge" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#4f46e5" />
+            <stop offset="100%" stop-color="#06b6d4" />
+          </linearGradient>
+        </defs>
+        <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke="url(#logoGradLarge)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M12 6v12M8 10l4-4 4 4M8 14l4 4 4-4" stroke="url(#logoGradLarge)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h2>Welcome to Pipeline</h2>
+      <p class="login-subtitle">Select a profile to log in and manage your CRM pipeline</p>
+    </div>
+    
+    <div class="login-profiles">
+      <!-- Admin Profile -->
+      <button class="login-profile-btn" data-role="ADMIN">
+        <div class="profile-avatar admin-avatar">A</div>
+        <div class="profile-info">
+          <span class="profile-title">Administrator</span>
+          <span class="profile-email">admin@pipeline.com</span>
+        </div>
+      </button>
+
+      <!-- Sales Manager Profile -->
+      <button class="login-profile-btn" data-role="MANAGER">
+        <div class="profile-avatar manager-avatar">M</div>
+        <div class="profile-info">
+          <span class="profile-title">Sales Manager</span>
+          <span class="profile-email">manager@pipeline.com</span>
+        </div>
+      </button>
+
+      <!-- Sales Executive Profile -->
+      <button class="login-profile-btn" data-role="SALES_EXEC">
+        <div class="profile-avatar exec-avatar">S</div>
+        <div class="profile-info">
+          <span class="profile-title">Sales Executive</span>
+          <span class="profile-email">exec@pipeline.com</span>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=4"></script>
 </body>
 </html>

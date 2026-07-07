@@ -1327,32 +1327,55 @@ function refreshCurrentView() {
   navigateToView(NAV_ROLE_MAP[view]?.includes(currentRole) ? view : 'dashboard');
 }
 
-function initRoleSwitcher() {
-  const select = document.getElementById('roleSwitcher');
+function initAuth() {
+  const loginScreen = document.getElementById('loginScreen');
   const nameEl = document.querySelector('.user-name');
   const roleEl = document.querySelector('.user-role');
   const avatars = document.querySelectorAll('.avatar, .topbar-avatar');
-  if (!select) return;
+  const logoutBtn = document.getElementById('logoutBtn');
 
   function applyIdentity() {
     const role = ROLES[currentRole];
-    select.value = currentRole;
-    nameEl.textContent = role.name;
-    roleEl.textContent = role.label;
+    if (nameEl) nameEl.textContent = role.name;
+    if (roleEl) roleEl.textContent = role.label;
     avatars.forEach(a => { a.textContent = role.name.charAt(0); });
   }
 
-  applyIdentity();
-  applyRoleGating();
+  function updateAuthState() {
+    const loggedIn = localStorage.getItem('pipeline_logged_in') === 'true';
+    if (loggedIn) {
+      if (loginScreen) loginScreen.classList.add('hidden');
+      applyIdentity();
+      applyRoleGating();
+      refreshCurrentView();
+    } else {
+      if (loginScreen) loginScreen.classList.remove('hidden');
+    }
+  }
 
-  select.addEventListener('change', () => {
-    currentRole = select.value;
-    localStorage.setItem('pipeline_role', currentRole);
-    applyIdentity();
-    applyRoleGating();
-    refreshCurrentView();
-    showToast(`Switched to ${ROLES[currentRole].label} view.`);
+  // Initial check
+  updateAuthState();
+
+  // Attach profile selectors
+  document.querySelectorAll('.login-profile-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const selectedRole = btn.getAttribute('data-role');
+      currentRole = selectedRole;
+      localStorage.setItem('pipeline_role', selectedRole);
+      localStorage.setItem('pipeline_logged_in', 'true');
+      showToast(`Logged in as ${ROLES[selectedRole].label}`);
+      updateAuthState();
+    });
   });
+
+  // Attach logout
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('pipeline_logged_in');
+      showToast('Logged out successfully.');
+      updateAuthState();
+    });
+  }
 }
 function initNotifTopbarTrigger() {
   const notifBtn = document.getElementById('notifBtn');
@@ -1489,7 +1512,7 @@ async function init() {
   initNotifTopbarTrigger();
   initGlobalEscapeHandler();
   initCampaigns();
-  initRoleSwitcher();
+  initAuth();
 
   // Draw Dashboard Metrics
   recalculateAllData();
