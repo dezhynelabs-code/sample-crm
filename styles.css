@@ -771,3 +771,12 @@ input:checked + .slider:before { transform: translateX(22px); }
   padding: 10px 0;
   justify-content: center;
 }
+.logout-icon {
+  display: block;
+  flex-shrink: 0;
+  color: var(--color-slate);
+  transition: color var(--motion-fast);
+}
+#logoutBtn:hover .logout-icon {
+  color: var(--color-accent);
+}
