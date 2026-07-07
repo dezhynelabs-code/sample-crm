@@ -109,14 +109,16 @@ body {
 .sidebar.collapsed .user-meta,
 .sidebar.collapsed .theme-toggle-label { display: none; }
 .sidebar.collapsed .theme-toggle-btn { justify-content: center; }
-.sidebar.collapsed .sidebar-top {
+.sidebar.collapsed .sidebar-top,
+.sidebar:not(.force-open) .sidebar-top {
   padding: 16px 12px;
   flex-direction: column;
   gap: 12px;
   height: auto;
   align-items: center;
 }
-.sidebar.collapsed .collapse-btn .toggle-sidebar-icon {
+.sidebar.collapsed .collapse-btn .toggle-sidebar-icon,
+.sidebar:not(.force-open) .collapse-btn .toggle-sidebar-icon {
   transform: scaleX(-1);
 }
 

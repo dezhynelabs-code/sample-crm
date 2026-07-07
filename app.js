@@ -1495,9 +1495,24 @@ async function init() {
   recalculateAllData();
   renderNotifications();
 
-  // Sidebar controls
   document.getElementById('collapseBtn').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('collapsed');
+    const sidebar = document.getElementById('sidebar');
+    const isMobileTablet = window.innerWidth <= 1279;
+    if (isMobileTablet) {
+      sidebar.classList.toggle('force-open');
+      if (sidebar.classList.contains('force-open')) {
+        sidebar.classList.remove('collapsed');
+      } else {
+        sidebar.classList.add('collapsed');
+      }
+    } else {
+      sidebar.classList.toggle('collapsed');
+      if (sidebar.classList.contains('collapsed')) {
+        sidebar.classList.remove('force-open');
+      } else {
+        sidebar.classList.add('force-open');
+      }
+    }
   });
 
   document.getElementById('hamburger').addEventListener('click', () => {
