@@ -364,9 +364,9 @@ function renderDonut(leads) {
         legend: {
           position: 'right',
           labels: {
-            color: 'var(--color-slate)',
+            color: getComputedStyle(document.documentElement).getPropertyValue('--color-slate').trim() || '#94a3b8',
             font: {
-              family: 'var(--font-sans)',
+              family: getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim() || 'Inter',
               size: 12
             },
             usePointStyle: true,
@@ -961,8 +961,15 @@ function renderMonthlyVelocityChart() {
         legend: { display: false }
       },
       scales: {
-        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
-        x: { grid: { display: false } }
+        y: { 
+          beginAtZero: true, 
+          grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--color-line').trim() || 'rgba(0,0,0,0.05)' },
+          ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--color-slate').trim() || '#9ca3af' }
+        },
+        x: { 
+          grid: { display: false },
+          ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--color-slate').trim() || '#9ca3af' }
+        }
       }
     }
   });
@@ -1013,6 +1020,7 @@ function renderSlaGauge() {
           display: true,
           text: `${avgMinutes}m (Target: <${target}m)`,
           position: 'bottom',
+          color: getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() || '#1f2937',
           font: { size: 16 }
         }
       }
@@ -1292,6 +1300,16 @@ function initTheme() {
       iconEl.textContent = '☀️';
       labelEl.textContent = 'Light Mode';
     }
+    
+    // Slight delay to ensure CSS variables have applied to the DOM before fetching them
+    setTimeout(() => {
+      if (window.sourceDonutInstance && typeof getScopedLeads === 'function') {
+        renderDonut(getScopedLeads());
+      }
+      if (window.velocityChartInstance && typeof renderAnalyticsView === 'function') {
+        renderAnalyticsView();
+      }
+    }, 50);
   }
 }
 
