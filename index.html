@@ -147,9 +147,8 @@
             <div class="card-header">
               <h3>Leads by Source</h3>
             </div>
-            <div class="donut-wrap">
-              <svg viewBox="0 0 120 120" class="donut" id="donutChart"></svg>
-              <div class="legend" id="donutLegend"></div>
+            <div class="donut-wrap" style="height: 200px; position: relative;">
+              <canvas id="sourceDonutChart"></canvas>
             </div>
           </div>
         </section>
@@ -216,6 +215,10 @@
 
         <section class="card">
           <div class="toolbar-row">
+            <div class="view-mode-toggle">
+              <button class="mode-btn active" id="viewModeTable">Table</button>
+              <button class="mode-btn" id="viewModeKanban">Kanban</button>
+            </div>
             <div class="search-box inline-search">
               <span class="search-icon">⌕</span>
               <input type="text" placeholder="Search by name..." id="leadsDirSearch" />
@@ -256,6 +259,9 @@
             </thead>
             <tbody></tbody>
           </table>
+          <div class="kanban-board" id="kanbanBoard" style="display: none;">
+            <!-- Populated dynamically via app.js -->
+          </div>
         </section>
       </div>
 
@@ -369,15 +375,8 @@
               <span class="card-sub">Growth rate comparison</span>
             </div>
             <!-- Custom CSS Chart -->
-            <div class="chart-placeholder">
-              <div class="bar-chart-visual">
-                <div class="bar-col"><div class="bar-value" style="height: 40%"></div><span class="bar-lbl">Feb</span></div>
-                <div class="bar-col"><div class="bar-value" style="height: 55%"></div><span class="bar-lbl">Mar</span></div>
-                <div class="bar-col"><div class="bar-value" style="height: 70%"></div><span class="bar-lbl">Apr</span></div>
-                <div class="bar-col"><div class="bar-value" style="height: 65%"></div><span class="bar-lbl">May</span></div>
-                <div class="bar-col"><div class="bar-value" style="height: 85%"></div><span class="bar-lbl">Jun</span></div>
-                <div class="bar-col"><div class="bar-value" style="height: 98%"></div><span class="bar-lbl">Jul</span></div>
-              </div>
+            <div class="chart-placeholder" style="background: none; padding: 0;">
+              <canvas id="velocityChart"></canvas>
             </div>
           </div>
 
@@ -386,15 +385,8 @@
               <h3>SLA Performance (Response Time)</h3>
               <span class="card-sub">Time from generation to representative contact</span>
             </div>
-            <div class="chart-placeholder">
-              <div class="gauge-meter-wrapper">
-                <svg class="gauge-meter" viewBox="0 0 100 50">
-                  <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="var(--color-line)" stroke-width="8" stroke-linecap="round"/>
-                  <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="var(--color-accent)" stroke-width="8" stroke-dasharray="125" stroke-dashoffset="35" stroke-linecap="round"/>
-                </svg>
-                <div class="gauge-value">12m</div>
-                <div class="gauge-label">Average Response Time (Target: &lt;15m)</div>
-              </div>
+            <div class="chart-placeholder" style="background: none; padding: 0;">
+              <canvas id="slaGaugeChart"></canvas>
             </div>
           </div>
         </section>
@@ -714,6 +706,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="app.js?v=6"></script>
 </body>
 </html>

@@ -333,34 +333,49 @@ function renderFunnel(leads) {
 }
 
 function renderDonut(leads) {
+  const canvas = document.getElementById('sourceDonutChart');
+  if (!canvas) return;
+
   const bySource = {};
   leads.forEach(l => { bySource[l.source] = (bySource[l.source] || 0) + 1; });
-  const total = leads.length || 1;
   const entries = Object.entries(bySource).sort((a, b) => b[1] - a[1]);
 
-  const r = 50, cx = 60, cy = 60, circumference = 2 * Math.PI * r;
-  let offsetAcc = 0;
-  const circles = entries.map(([source, count]) => {
-    const frac = count / total;
-    const dash = frac * circumference;
-    const circle = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${SOURCE_COLORS[source] || '#9ca3af'}"
-      stroke-width="16" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${-offsetAcc}" stroke-linecap="round" />`;
-    offsetAcc += dash;
-    return circle;
-  }).join('');
+  if (window.sourceDonutInstance) {
+    window.sourceDonutInstance.destroy();
+  }
 
-  document.getElementById('donutChart').innerHTML = `
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--color-line)" stroke-width="16" />
-    ${circles}
-  `;
-
-  document.getElementById('donutLegend').innerHTML = entries.map(([source, count]) => `
-    <div class="legend-item">
-      <span class="legend-swatch" style="background:${SOURCE_COLORS[source] || '#9ca3af'}"></span>
-      <span>${SOURCE_LABELS[source] || source}</span>
-      <span class="legend-value">${count}</span>
-    </div>
-  `).join('');
+  const ctx = canvas.getContext('2d');
+  window.sourceDonutInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(([source]) => SOURCE_LABELS[source] || source),
+      datasets: [{
+        data: entries.map(([_, count]) => count),
+        backgroundColor: entries.map(([source]) => SOURCE_COLORS[source] || '#9ca3af'),
+        borderWidth: 0,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '70%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: {
+            color: 'var(--color-slate)',
+            font: {
+              family: 'var(--font-sans)',
+              size: 12
+            },
+            usePointStyle: true,
+            padding: 16
+          }
+        }
+      }
+    }
+  });
 }
 
 function renderLeaderboard(leads) {
@@ -460,7 +475,115 @@ function renderLeadsDirectory() {
 
   bindRowClicks();
   bindDeleteInlineButtons();
+  
+  renderKanbanBoard(filtered);
 }
+
+function renderKanbanBoard(leads) {
+  const board = document.getElementById('kanbanBoard');
+  if (!board) return;
+
+  const columns = [
+    { id: 'NEW', label: 'New' },
+    { id: 'CONTACTED', label: 'Contacted' },
+    { id: 'QUALIFIED', label: 'Qualified' },
+    { id: 'PROPOSAL', label: 'Proposal' },
+    { id: 'NEGOTIATION', label: 'Negotiation' },
+    { id: 'WON', label: 'Won' },
+    { id: 'LOST', label: 'Lost' }
+  ];
+
+  let html = '';
+  columns.forEach(col => {
+    const colLeads = leads.filter(l => l.status === col.id);
+    html += `
+      <div class="kanban-col" data-status="${col.id}">
+        <div class="kanban-col-header">
+          <span>${col.label}</span>
+          <span class="kanban-col-count">${colLeads.length}</span>
+        </div>
+        <div class="kanban-cards" data-status="${col.id}">
+          ${colLeads.map(l => `
+            <div class="kanban-card lead-row-click" draggable="true" data-id="${l.id}">
+              <div class="kanban-card-top">
+                <div class="kanban-card-title">${l.firstName} ${l.lastName || ''}</div>
+                <div class="kanban-card-score" style="color: ${l.score >= 80 ? 'var(--status-won)' : 'inherit'}">${l.score || 0}</div>
+              </div>
+              <div class="kanban-card-source">${sourceChip(l.source)}</div>
+              <div class="kanban-card-bottom">
+                <div class="kanban-card-date">${timeAgo(l.createdAt)}</div>
+                ${l.owner ? `
+                  <div class="kanban-card-owner" title="${l.owner}">
+                    <div class="kanban-card-owner-avatar">${l.owner.charAt(0)}</div>
+                  </div>
+                ` : '<span style="color:var(--color-slate)">Unassigned</span>'}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  });
+
+  board.innerHTML = html;
+  bindRowClicks(); // re-bind for kanban cards
+
+  // Drag and Drop Logic
+  const cards = board.querySelectorAll('.kanban-card');
+  const dropzones = board.querySelectorAll('.kanban-cards');
+
+  cards.forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+      setTimeout(() => card.style.opacity = '0.5', 0);
+    });
+    card.addEventListener('dragend', () => {
+      card.style.opacity = '1';
+    });
+  });
+
+  dropzones.forEach(zone => {
+    zone.addEventListener('dragover', e => {
+      e.preventDefault();
+      zone.parentElement.classList.add('kanban-drag-over');
+    });
+    zone.addEventListener('dragleave', e => {
+      zone.parentElement.classList.remove('kanban-drag-over');
+    });
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.parentElement.classList.remove('kanban-drag-over');
+      const leadId = e.dataTransfer.getData('text/plain');
+      const newStatus = zone.dataset.status;
+      if (leadId && newStatus) {
+        updateLead(leadId, { status: newStatus });
+      }
+    });
+  });
+}
+
+function initViewToggle() {
+  const btnTable = document.getElementById('viewModeTable');
+  const btnKanban = document.getElementById('viewModeKanban');
+  const table = document.getElementById('leadsDirTable');
+  const kanban = document.getElementById('kanbanBoard');
+
+  if (btnTable && btnKanban) {
+    btnTable.addEventListener('click', () => {
+      btnTable.classList.add('active');
+      btnKanban.classList.remove('active');
+      table.style.display = 'table';
+      kanban.style.display = 'none';
+    });
+    btnKanban.addEventListener('click', () => {
+      btnKanban.classList.add('active');
+      btnTable.classList.remove('active');
+      table.style.display = 'none';
+      kanban.style.display = 'flex';
+    });
+  }
+}
+
 
 /* -----------------------------------------------------------
    View Render: Notifications
@@ -798,10 +921,9 @@ function renderAnalyticsView() {
 }
 
 function renderMonthlyVelocityChart() {
-  const container = document.querySelector('#view-analytics .bar-chart-visual');
-  if (!container) return;
+  const canvas = document.getElementById('velocityChart');
+  if (!canvas) return;
 
-  // Bucket leads by month for the last 6 months (including months with 0 leads)
   const now = new Date();
   const buckets = [];
   for (let i = 5; i >= 0; i--) {
@@ -816,28 +938,42 @@ function renderMonthlyVelocityChart() {
     if (bucket) bucket.count++;
   });
 
-  const max = Math.max(...buckets.map(b => b.count), 1);
+  if (window.velocityChartInstance) {
+    window.velocityChartInstance.destroy();
+  }
 
-  container.innerHTML = buckets.map(b => `
-    <div class="bar-col">
-      <div class="bar-value" style="height:${Math.max(4, (b.count / max) * 100)}%" title="${b.count} leads"></div>
-      <span class="bar-lbl">${b.label}</span>
-    </div>
-  `).join('');
+  const ctx = canvas.getContext('2d');
+  window.velocityChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: buckets.map(b => b.label),
+      datasets: [{
+        label: 'Leads Generated',
+        data: buckets.map(b => b.count),
+        backgroundColor: '#4f46e5',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
 }
 
 function renderSlaGauge() {
-  const valueEl = document.querySelector('#view-analytics .gauge-value');
-  const pathEl = document.querySelector('#view-analytics .gauge-meter path:last-child');
-  const labelEl = document.querySelector('#view-analytics .gauge-label');
-  if (!valueEl || !pathEl) return;
+  const canvas = document.getElementById('slaGaugeChart');
+  if (!canvas) return;
 
-  // Approximate "response time" from history: minutes between a lead's
-  // creation entry and its next recorded activity, averaged across leads
-  // that actually have a follow-up event. Leads with only the CREATE
-  // event (no rep action yet) are excluded — there's nothing to measure.
   const withFollowUp = getScopedLeads().filter(l => l.history && l.history.length > 1);
-  let avgMinutes = 12; // fallback so the gauge never renders empty
+  let avgMinutes = 12; // fallback
   if (withFollowUp.length > 0) {
     const total = withFollowUp.reduce((sum, l) => {
       const created = new Date(l.history[0].time).getTime();
@@ -848,14 +984,40 @@ function renderSlaGauge() {
   }
 
   const target = 15;
-  const pct = Math.min(1, avgMinutes / (target * 2)); // 2x target = full gauge
-  const arcLength = 125;
-  const offset = Math.round(arcLength * (1 - pct));
+  const isHealthy = avgMinutes <= target;
 
-  valueEl.textContent = avgMinutes + 'm';
-  pathEl.setAttribute('stroke-dashoffset', offset);
-  pathEl.setAttribute('stroke', avgMinutes <= target ? 'var(--status-won)' : 'var(--status-danger)');
-  labelEl.textContent = `Average Response Time (Target: <${target}m)`;
+  if (window.slaChartInstance) {
+    window.slaChartInstance.destroy();
+  }
+
+  const ctx = canvas.getContext('2d');
+  window.slaChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Avg Response Time', 'Remaining to Target Limit'],
+      datasets: [{
+        data: [avgMinutes, Math.max(0, target * 2 - avgMinutes)],
+        backgroundColor: [isHealthy ? '#10b981' : '#ef4444', 'rgba(0,0,0,0.05)'],
+        borderWidth: 0,
+        circumference: 180,
+        rotation: 270
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '75%',
+      plugins: {
+        legend: { display: false },
+        title: {
+          display: true,
+          text: `${avgMinutes}m (Target: <${target}m)`,
+          position: 'bottom',
+          font: { size: 16 }
+        }
+      }
+    }
+  });
 }
 
 /* -----------------------------------------------------------
@@ -905,7 +1067,11 @@ function openLeadDrawer(id) {
 
     <div class="drawer-timeline-section">
       <h4>Activity Timeline</h4>
-      <div class="activity-timeline">
+      <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+        <input type="text" id="drawerQuickNote" class="filter-input w-100" placeholder="Add a quick note..." style="flex:1;">
+        <button id="drawerSubmitNoteBtn" class="btn btn-secondary">Add</button>
+      </div>
+      <div class="activity-timeline" id="drawerActivityTimeline">
         ${renderActivityTimeline(lead)}
       </div>
     </div>
@@ -936,10 +1102,7 @@ function openLeadDrawer(id) {
         </select>
       </div>
 
-      <div class="form-group">
-        <label>Internal Activity Notes</label>
-        <textarea class="drawer-notes-area" id="drawerNotesField" placeholder="Record feedback, interaction records, or qualification queries...">${lead.notes || ''}</textarea>
-      </div>
+        <!-- notes area removed in favor of quick notes timeline -->
     </div>
 
     <div class="drawer-actions-section" style="margin-top:auto; flex-direction:row; gap:10px;">
@@ -952,10 +1115,30 @@ function openLeadDrawer(id) {
   document.getElementById('drawerSaveBtn').addEventListener('click', () => {
     const status = document.getElementById('drawerStatusField').value;
     const owner = canReassign ? document.getElementById('drawerOwnerField').value : lead.owner;
-    const notes = document.getElementById('drawerNotesField').value;
 
-    updateLead(lead.id, { status, owner, notes });
+    updateLead(lead.id, { status, owner });
     closeLeadDrawer();
+  });
+
+  const noteInput = document.getElementById('drawerQuickNote');
+  const noteBtn = document.getElementById('drawerSubmitNoteBtn');
+  
+  const submitNote = () => {
+    const text = noteInput.value.trim();
+    if (text) {
+      // Add note directly to history and update UI
+      lead.history = lead.history || [];
+      lead.history.push({ type: 'UPDATE', label: `Note added: "${text}"`, time: new Date().toISOString() });
+      saveLeadsToStorage(); // persist
+      document.getElementById('drawerActivityTimeline').innerHTML = renderActivityTimeline(lead);
+      noteInput.value = ''; // clear
+      showToast('Note added to timeline');
+    }
+  };
+
+  noteBtn.addEventListener('click', submitNote);
+  noteInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') submitNote();
   });
 
   const deleteBtn = document.getElementById('drawerDeleteBtn');
@@ -1170,10 +1353,26 @@ function initSettingsActions() {
       document.querySelectorAll('.avatar, .topbar-avatar').forEach(avatar => {
         avatar.textContent = name.charAt(0);
       });
+      localStorage.setItem('pipeline_admin_name', name);
+      localStorage.setItem('pipeline_admin_email', email);
       showToast('Profile configuration saved.');
       addSystemNotification('Profile Configuration Saved', `Admin profile metrics set. Active email is ${email}.`);
     }
   });
+
+  // Load saved settings
+  const savedName = localStorage.getItem('pipeline_admin_name');
+  const savedEmail = localStorage.getItem('pipeline_admin_email');
+  if (savedName) {
+    document.getElementById('settingsUserName').value = savedName;
+    document.querySelector('.user-name').textContent = savedName;
+    document.querySelectorAll('.avatar, .topbar-avatar').forEach(avatar => {
+      avatar.textContent = savedName.charAt(0);
+    });
+  }
+  if (savedEmail) {
+    document.getElementById('settingsUserEmail').value = savedEmail;
+  }
 
   // DB reset action
   document.getElementById('resetMockDataBtn').addEventListener('click', () => {
@@ -1209,17 +1408,29 @@ function initIntegrationsToggles() {
       const statusText = card.querySelector('.integration-status');
 
       if (checkbox.checked) {
-        statusText.textContent = 'Connected';
-        statusText.classList.remove('disconnected');
-        statusText.classList.add('connected');
-        showToast(`${title} service successfully linked.`);
-        addSystemNotification('Integration Connected', `Synced pipeline with ${title}.`);
+        statusText.textContent = 'Connecting...';
+        statusText.style.color = 'var(--status-progress)';
+        
+        setTimeout(() => {
+          statusText.textContent = 'Connected';
+          statusText.style.color = ''; // reset to default classes
+          statusText.classList.remove('disconnected');
+          statusText.classList.add('connected');
+          showToast(`${title} service successfully linked.`);
+          addSystemNotification('Integration Connected', `Synced pipeline with ${title}.`);
+        }, 1500);
       } else {
-        statusText.textContent = 'Disconnected';
-        statusText.classList.remove('connected');
-        statusText.classList.add('disconnected');
-        showToast(`${title} service unlinked.`);
-        addSystemNotification('Integration Unlinked', `Pipeline disconnected from ${title}.`, 'warning');
+        statusText.textContent = 'Disconnecting...';
+        statusText.style.color = 'var(--status-progress)';
+        
+        setTimeout(() => {
+          statusText.textContent = 'Disconnected';
+          statusText.style.color = '';
+          statusText.classList.remove('connected');
+          statusText.classList.add('disconnected');
+          showToast(`${title} service unlinked.`);
+          addSystemNotification('Integration Unlinked', `Pipeline disconnected from ${title}.`, 'warning');
+        }, 800);
       }
     });
   });
@@ -1513,6 +1724,7 @@ async function init() {
   initGlobalEscapeHandler();
   initCampaigns();
   initAuth();
+  initViewToggle();
 
   // Draw Dashboard Metrics
   recalculateAllData();
