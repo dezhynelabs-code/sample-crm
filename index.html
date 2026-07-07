@@ -16,10 +16,24 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-top">
       <div class="logo">
-        <span class="logo-mark">◆</span>
+        <svg class="logo-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#4f46e5" />
+              <stop offset="100%" stop-color="#06b6d4" />
+            </linearGradient>
+          </defs>
+          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke="url(#logoGrad)" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M12 6v12M8 10l4-4 4 4M8 14l4 4 4-4" stroke="url(#logoGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
         <span class="logo-text">Pipeline</span>
       </div>
-      <button class="collapse-btn" id="collapseBtn" title="Collapse sidebar">⟨⟨</button>
+      <button class="collapse-btn" id="collapseBtn" title="Toggle Sidebar">
+        <svg class="toggle-sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="9" y1="3" x2="9" y2="21"/>
+        </svg>
+      </button>
     </div>
 
     <nav class="nav">
@@ -59,6 +73,14 @@
           <div class="user-name">Admin User</div>
           <div class="user-role">Administrator</div>
         </div>
+      </div>
+      <div class="role-switcher-wrap">
+        <label class="role-switcher-label" for="roleSwitcher">Viewing as</label>
+        <select id="roleSwitcher" class="role-switcher-select">
+          <option value="ADMIN">Administrator</option>
+          <option value="MANAGER">Sales Manager</option>
+          <option value="SALES_EXEC">Sales Executive</option>
+        </select>
       </div>
     </div>
   </aside>
@@ -184,6 +206,9 @@
             <p class="page-subtitle">Manage, filter, and track all incoming organization leads.</p>
           </div>
           <div class="page-actions">
+            <button class="btn btn-secondary" id="downloadExcelBtn">
+              <span style="margin-right: 6px;">⤓</span>Download Excel
+            </button>
             <button class="btn btn-primary" id="addLeadBtnLeadsView">+ Add Lead</button>
           </div>
         </div>
@@ -579,6 +604,46 @@
     <div class="modal-footer">
       <button type="button" class="btn btn-secondary" id="cancelLeadModalBtn">Cancel</button>
       <button type="submit" class="btn btn-primary">Create Lead</button>
+    </div>
+  </form>
+</div>
+
+<!-- Modal: New Campaign Form -->
+<div class="modal-overlay" id="campaignModalOverlay"></div>
+<div class="modal" id="campaignModal">
+  <div class="modal-header">
+    <h3>Create New Campaign</h3>
+    <button class="close-modal-btn" id="closeCampaignModalBtn">×</button>
+  </div>
+  <form id="newCampaignForm">
+    <div class="form-grid">
+      <div class="form-group" style="grid-column: span 2;">
+        <label for="campaignName">Campaign Name *</label>
+        <input type="text" id="campaignName" required placeholder="e.g. Meta Ads - Retargeting" />
+      </div>
+      <div class="form-group" style="grid-column: span 2;">
+        <label for="campaignSubtitle">Channel / Tracking Source</label>
+        <input type="text" id="campaignSubtitle" placeholder="e.g. Meta Ads Integration" />
+      </div>
+      <div class="form-group">
+        <label for="campaignStatus">Status</label>
+        <select id="campaignStatus">
+          <option value="active" selected>Active</option>
+          <option value="ended">Ended</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="campaignSpend">Spend ($)</label>
+        <input type="number" id="campaignSpend" min="0" step="0.01" placeholder="1000" value="0" />
+      </div>
+      <div class="form-group" style="grid-column: span 2;">
+        <label for="campaignLeadsGen">Leads Generated So Far</label>
+        <input type="number" id="campaignLeadsGen" min="0" placeholder="50" value="0" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="cancelCampaignModalBtn">Cancel</button>
+      <button type="submit" class="btn btn-primary">Create Campaign</button>
     </div>
   </form>
 </div>

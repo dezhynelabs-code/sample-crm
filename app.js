@@ -40,6 +40,56 @@ let allLeads = [];
 let allNotifications = [];
 
 /* -----------------------------------------------------------
+   Role-Based Access Control
+   Three roles, each mapped to a demo identity. In the real system
+   (per the Phase 6 architecture docs) this comes from the verified
+   JWT, never from client state — this simulation mirrors that same
+   shape so wiring in a real API later is a drop-in swap.
+   ----------------------------------------------------------- */
+const ROLES = {
+  ADMIN: { id: 'ADMIN', label: 'Administrator', name: 'Admin User' },
+  MANAGER: { id: 'MANAGER', label: 'Sales Manager', name: 'Priya Menon', team: ['Rahul K.', 'Sneha M.'] },
+  SALES_EXEC: { id: 'SALES_EXEC', label: 'Sales Executive', name: 'Rahul K.' },
+};
+
+// Which nav views each role is even allowed to see.
+const NAV_ROLE_MAP = {
+  dashboard: ['ADMIN', 'MANAGER', 'SALES_EXEC'],
+  leads: ['ADMIN', 'MANAGER', 'SALES_EXEC'],
+  campaigns: ['ADMIN', 'MANAGER'],
+  analytics: ['ADMIN', 'MANAGER', 'SALES_EXEC'],
+  integrations: ['ADMIN', 'MANAGER'],
+  notifications: ['ADMIN', 'MANAGER', 'SALES_EXEC'],
+  settings: ['ADMIN'],
+};
+
+let currentRole = localStorage.getItem('pipeline_role') || 'ADMIN';
+
+// The single choke point every render function reads through.
+// ADMIN sees every lead. MANAGER sees only leads owned by their team.
+// SALES_EXEC sees only leads they personally own. This is enforced
+// here — at the data layer — not just by hiding UI, matching the
+// RBAC principle from the architecture docs: a role check on a menu
+// item is UX only, never the actual authorization boundary.
+function getScopedLeads() {
+  if (currentRole === 'MANAGER') {
+    const team = ROLES.MANAGER.team;
+    return allLeads.filter(l => team.includes(l.owner));
+  }
+  if (currentRole === 'SALES_EXEC') {
+    return allLeads.filter(l => l.owner === ROLES.SALES_EXEC.name);
+  }
+  return allLeads; // ADMIN
+}
+
+function canManageLead(lead) {
+  if (currentRole === 'ADMIN') return true;
+  if (currentRole === 'MANAGER') return ROLES.MANAGER.team.includes(lead.owner);
+  if (currentRole === 'SALES_EXEC') return lead.owner === ROLES.SALES_EXEC.name;
+  return false;
+}
+
+/* -----------------------------------------------------------
    Mock Generators
    ----------------------------------------------------------- */
 function generateMockLeads() {
@@ -207,6 +257,36 @@ function timeAgo(dateStr) {
 }
 
 /* -----------------------------------------------------------
+   Activity Timeline renderer (drawer) — surfaces lead.history,
+   which was already being collected but never displayed anywhere.
+   ----------------------------------------------------------- */
+function renderActivityTimeline(lead) {
+  if (!lead.history || lead.history.length === 0) {
+    return `<div class="timeline-empty">No activity recorded yet.</div>`;
+  }
+
+  const iconFor = (type) => {
+    if (type === 'CREATE') return '✦';
+    if (type === 'UPDATE') return '↻';
+    return '•';
+  };
+
+  // Newest first
+  const items = [...lead.history].reverse();
+
+  return items.map((entry, i) => `
+    <div class="timeline-item ${i === 0 ? 'latest' : ''}">
+      <div class="timeline-icon">${iconFor(entry.type)}</div>
+      <div class="timeline-line"></div>
+      <div class="timeline-body">
+        <div class="timeline-label">${entry.label}</div>
+        <div class="timeline-time">${timeAgo(entry.time)} · ${new Date(entry.time).toLocaleString()}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* -----------------------------------------------------------
    View Render: Dashboard
    ----------------------------------------------------------- */
 function renderKPIs(leads) {
@@ -311,7 +391,7 @@ function renderRecentLeadsTable() {
   const nameFilter = document.getElementById('leadFilter').value.toLowerCase();
   const statusFilter = document.getElementById('statusFilter').value;
 
-  const filtered = allLeads.filter(l => {
+  const filtered = getScopedLeads().filter(l => {
     const fullName = `${l.firstName} ${l.lastName || ''}`.toLowerCase();
     const matchesName = fullName.includes(nameFilter);
     const matchesStatus = !statusFilter || l.status === statusFilter;
@@ -344,7 +424,7 @@ function renderLeadsDirectory() {
   const sourceVal = document.getElementById('leadsDirSourceFilter').value;
   const sortVal = document.getElementById('leadsDirSortFilter').value;
 
-  let filtered = allLeads.filter(l => {
+  let filtered = getScopedLeads().filter(l => {
     const fullName = `${l.firstName} ${l.lastName || ''}`.toLowerCase();
     const matchesSearch = fullName.includes(searchVal);
     const matchesStatus = !statusVal || l.status === statusVal;
@@ -373,7 +453,7 @@ function renderLeadsDirectory() {
       <td>${l.owner || '<span style="color:var(--color-slate)">Unassigned</span>'}</td>
       <td style="font-family:var(--font-mono); font-size:12px; color:var(--color-slate)">${timeAgo(l.createdAt)}</td>
       <td>
-        <button class="btn btn-secondary delete-lead-inline-btn" data-id="${l.id}" style="padding: 4px 8px; font-size: 11px;">Delete</button>
+        ${currentRole !== 'SALES_EXEC' ? `<button class="btn btn-secondary delete-lead-inline-btn" data-id="${l.id}" style="padding: 4px 8px; font-size: 11px;">Delete</button>` : '<span style="color:var(--color-slate); font-size:11px;">—</span>'}
       </td>
     </tr>
   `).join('') || '<tr><td colspan="7" style="color:var(--color-slate); text-align:center;">No leads found inside the directory</td></tr>';
@@ -515,6 +595,9 @@ function updateLead(id, updates) {
     const newOwner = updates.owner || 'Unassigned';
     historyEntry = `Reassigned from ${prevOwner} to ${newOwner}`;
   }
+  if (!historyEntry && updates.notes !== undefined && updates.notes !== current.notes && updates.notes) {
+    historyEntry = 'Internal note updated';
+  }
 
   // Update fields
   allLeads[leadIndex] = {
@@ -542,12 +625,237 @@ function deleteLead(id) {
 }
 
 function recalculateAllData() {
-  renderKPIs(allLeads);
-  renderFunnel(allLeads);
-  renderDonut(allLeads);
-  renderLeaderboard(allLeads);
+  const scoped = getScopedLeads();
+  renderKPIs(scoped);
+  renderFunnel(scoped);
+  renderDonut(scoped);
+  renderLeaderboard(scoped);
   renderRecentLeadsTable();
   renderLeadsDirectory();
+}
+
+/* -----------------------------------------------------------
+   Campaigns Module
+   Previously a static hardcoded table with no way to add a
+   campaign (the "+ New Campaign" button did nothing). Now backed
+   by real state, persisted like leads/notifications, with KPI
+   cards computed from that state instead of hardcoded numbers.
+   ----------------------------------------------------------- */
+let allCampaigns = [];
+
+function seedDefaultCampaigns() {
+  return [
+    { id: 'camp_1', name: 'Google Ads - Search Brand', subtitle: 'Google Ads Integration', status: 'active', spend: 4500, leadsGen: 362 },
+    { id: 'camp_2', name: 'Meta Ads - Lookalike Leads', subtitle: 'Meta Ads Integration', status: 'active', spend: 3800, leadsGen: 290 },
+    { id: 'camp_3', name: 'Newsletter Sponsor - Q3 Promo', subtitle: 'Manual Link Tracking', status: 'active', spend: 1500, leadsGen: 145 },
+    { id: 'camp_4', name: 'Blog Post Call to Action', subtitle: 'Website Organic', status: 'active', spend: 0, leadsGen: 88 },
+    { id: 'camp_5', name: 'YouTube Influencer Placement', subtitle: 'Partner Integration', status: 'ended', spend: 3000, leadsGen: 210 },
+  ];
+}
+
+function loadCampaigns() {
+  const saved = localStorage.getItem('pipeline_campaigns');
+  allCampaigns = saved ? JSON.parse(saved) : seedDefaultCampaigns();
+  if (!saved) saveCampaignsToStorage();
+}
+
+function saveCampaignsToStorage() {
+  localStorage.setItem('pipeline_campaigns', JSON.stringify(allCampaigns));
+}
+
+function campaignCPL(c) {
+  return c.leadsGen > 0 ? c.spend / c.leadsGen : 0;
+}
+
+// Conversion rate isn't tracked independently in this simplified model,
+// so it's approximated from a fixed multiplier on lead volume — flagged
+// here as an approximation rather than silently presented as measured data.
+function campaignConvRate(c) {
+  return c.leadsGen > 0 ? Math.min(35, Math.round((c.leadsGen / (c.spend || 1)) * 100 * 10) / 10) : 0;
+}
+
+function renderCampaignsKPIs() {
+  const active = allCampaigns.filter(c => c.status === 'active').length;
+  const totalSpend = allCampaigns.reduce((s, c) => s + c.spend, 0);
+  const totalLeads = allCampaigns.reduce((s, c) => s + c.leadsGen, 0);
+  const avgCpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
+  const wonLeadsValue = allLeads.filter(l => l.status === 'WON').length * 250; // approximate deal value
+  const roi = totalSpend > 0 ? Math.round(((wonLeadsValue - totalSpend) / totalSpend) * 100) : 0;
+
+  const grid = document.querySelector('#view-campaigns .kpi-grid');
+  if (!grid) return;
+  grid.innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Active Campaigns</div>
+      <div class="kpi-value">${active}</div>
+      <div class="kpi-delta up">${allCampaigns.length} total</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Spend</div>
+      <div class="kpi-value">$${totalSpend.toLocaleString()}</div>
+      <div class="kpi-delta up">Across ${allCampaigns.length} campaigns</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg. Cost Per Lead</div>
+      <div class="kpi-value">$${avgCpl.toFixed(2)}</div>
+      <div class="kpi-delta up">${totalLeads} leads generated</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Estimated ROI</div>
+      <div class="kpi-value">${roi}%</div>
+      <div class="kpi-delta ${roi >= 0 ? 'up' : 'down'}">Based on won leads</div>
+    </div>
+  `;
+}
+
+function renderCampaignsTable() {
+  const tbody = document.querySelector('#campaignsTable tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = allCampaigns.map(c => `
+    <tr>
+      <td class="lead-name">${c.name}<div class="lead-name-sub">${c.subtitle}</div></td>
+      <td><span class="status-badge status-${c.status === 'active' ? 'WON' : 'LOST'}">${c.status === 'active' ? 'Active' : 'Ended'}</span></td>
+      <td>${c.spend > 0 ? '$' + c.spend.toLocaleString() : '$0 (SEO)'}</td>
+      <td>${c.leadsGen}</td>
+      <td>$${campaignCPL(c).toFixed(2)}</td>
+      <td>${campaignConvRate(c)}%</td>
+      <td>${currentRole === 'ADMIN' ? `<button class="btn btn-secondary delete-campaign-btn" data-id="${c.id}" style="padding:4px 8px; font-size:11px;">Delete</button>` : '<span style="color:var(--color-slate); font-size:11px;">—</span>'}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" style="color:var(--color-slate); text-align:center;">No campaigns yet</td></tr>';
+
+  document.querySelectorAll('.delete-campaign-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = allCampaigns.find(x => x.id === btn.dataset.id);
+      if (c && confirm(`Delete campaign "${c.name}"?`)) {
+        allCampaigns = allCampaigns.filter(x => x.id !== c.id);
+        saveCampaignsToStorage();
+        renderCampaignsKPIs();
+        renderCampaignsTable();
+        showToast('Campaign deleted.');
+      }
+    });
+  });
+}
+
+function renderCampaignsView() {
+  renderCampaignsKPIs();
+  renderCampaignsTable();
+}
+
+function addCampaign(name, subtitle, status, spend, leadsGen) {
+  allCampaigns.unshift({
+    id: 'camp_' + Math.floor(Math.random() * 10000000),
+    name, subtitle, status,
+    spend: parseFloat(spend) || 0,
+    leadsGen: parseInt(leadsGen) || 0,
+  });
+  saveCampaignsToStorage();
+  renderCampaignsView();
+  addSystemNotification('New Campaign Created', `"${name}" is now tracking lead acquisition.`, 'info');
+  showToast('Campaign created.');
+}
+
+function initCampaigns() {
+  loadCampaigns();
+
+  const overlay = document.getElementById('campaignModalOverlay');
+  const modal = document.getElementById('campaignModal');
+  const form = document.getElementById('newCampaignForm');
+  const openBtn = document.getElementById('newCampaignBtn');
+
+  if (!overlay || !modal || !form || !openBtn) return; // markup not present yet
+
+  function openModal() { overlay.classList.add('show'); modal.classList.add('show'); }
+  function closeModal() { overlay.classList.remove('show'); modal.classList.remove('show'); form.reset(); }
+
+  openBtn.addEventListener('click', openModal);
+  document.getElementById('closeCampaignModalBtn').addEventListener('click', closeModal);
+  document.getElementById('cancelCampaignModalBtn').addEventListener('click', closeModal);
+  overlay.addEventListener('click', closeModal);
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('campaignName').value.trim();
+    const subtitle = document.getElementById('campaignSubtitle').value.trim() || 'Manual Entry';
+    const status = document.getElementById('campaignStatus').value;
+    const spend = document.getElementById('campaignSpend').value;
+    const leadsGen = document.getElementById('campaignLeadsGen').value;
+    addCampaign(name, subtitle, status, spend, leadsGen);
+    closeModal();
+  });
+}
+
+/* -----------------------------------------------------------
+   Analytics Module
+   Previously fully static (hardcoded bar heights and a hardcoded
+   "12m" SLA gauge). Now computed from allLeads so the numbers
+   actually reflect the mock/live data currently loaded.
+   ----------------------------------------------------------- */
+function renderAnalyticsView() {
+  renderMonthlyVelocityChart();
+  renderSlaGauge();
+}
+
+function renderMonthlyVelocityChart() {
+  const container = document.querySelector('#view-analytics .bar-chart-visual');
+  if (!container) return;
+
+  // Bucket leads by month for the last 6 months (including months with 0 leads)
+  const now = new Date();
+  const buckets = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleString('default', { month: 'short' }), count: 0 });
+  }
+
+  getScopedLeads().forEach(l => {
+    const d = new Date(l.createdAt);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    const bucket = buckets.find(b => b.key === key);
+    if (bucket) bucket.count++;
+  });
+
+  const max = Math.max(...buckets.map(b => b.count), 1);
+
+  container.innerHTML = buckets.map(b => `
+    <div class="bar-col">
+      <div class="bar-value" style="height:${Math.max(4, (b.count / max) * 100)}%" title="${b.count} leads"></div>
+      <span class="bar-lbl">${b.label}</span>
+    </div>
+  `).join('');
+}
+
+function renderSlaGauge() {
+  const valueEl = document.querySelector('#view-analytics .gauge-value');
+  const pathEl = document.querySelector('#view-analytics .gauge-meter path:last-child');
+  const labelEl = document.querySelector('#view-analytics .gauge-label');
+  if (!valueEl || !pathEl) return;
+
+  // Approximate "response time" from history: minutes between a lead's
+  // creation entry and its next recorded activity, averaged across leads
+  // that actually have a follow-up event. Leads with only the CREATE
+  // event (no rep action yet) are excluded — there's nothing to measure.
+  const withFollowUp = getScopedLeads().filter(l => l.history && l.history.length > 1);
+  let avgMinutes = 12; // fallback so the gauge never renders empty
+  if (withFollowUp.length > 0) {
+    const total = withFollowUp.reduce((sum, l) => {
+      const created = new Date(l.history[0].time).getTime();
+      const next = new Date(l.history[1].time).getTime();
+      return sum + Math.max(0, (next - created) / 60000);
+    }, 0);
+    avgMinutes = Math.round(total / withFollowUp.length) || 1;
+  }
+
+  const target = 15;
+  const pct = Math.min(1, avgMinutes / (target * 2)); // 2x target = full gauge
+  const arcLength = 125;
+  const offset = Math.round(arcLength * (1 - pct));
+
+  valueEl.textContent = avgMinutes + 'm';
+  pathEl.setAttribute('stroke-dashoffset', offset);
+  pathEl.setAttribute('stroke', avgMinutes <= target ? 'var(--status-won)' : 'var(--status-danger)');
+  labelEl.textContent = `Average Response Time (Target: <${target}m)`;
 }
 
 /* -----------------------------------------------------------
@@ -557,9 +865,20 @@ function openLeadDrawer(id) {
   const lead = allLeads.find(l => l.id === id);
   if (!lead) return;
 
+  // Row-level guard: even if something in the DOM referenced a lead id
+  // outside this role's scope, block it here rather than trusting the
+  // caller — the same principle as the server-side scoping this UI
+  // simulates (a role check is never sufficient on its own).
+  if (!canManageLead(lead)) {
+    showToast("You don't have access to this lead.");
+    return;
+  }
+
   const drawerContent = document.getElementById('drawerContent');
   const overlay = document.getElementById('drawerOverlay');
   const drawer = document.getElementById('leadDrawer');
+  const canReassign = currentRole !== 'SALES_EXEC'; // reps work leads, they don't reassign them
+  const canDelete = currentRole === 'ADMIN'; // only Admin can permanently delete a lead
 
   // Fill in content
   drawerContent.innerHTML = `
@@ -584,6 +903,13 @@ function openLeadDrawer(id) {
       </div>
     </div>
 
+    <div class="drawer-timeline-section">
+      <h4>Activity Timeline</h4>
+      <div class="activity-timeline">
+        ${renderActivityTimeline(lead)}
+      </div>
+    </div>
+
     <div class="drawer-actions-section">
       <h4>Pipeline Management</h4>
       <div class="form-group">
@@ -601,7 +927,7 @@ function openLeadDrawer(id) {
 
       <div class="form-group">
         <label>Assigned Lead Representative</label>
-        <select id="drawerOwnerField" class="filter-select w-100">
+        <select id="drawerOwnerField" class="filter-select w-100" ${canReassign ? '' : 'disabled title="Sales Executives cannot reassign leads"'}>
           <option value="" ${!lead.owner ? 'selected' : ''}>Unassigned</option>
           <option value="Rahul K." ${lead.owner === 'Rahul K.' ? 'selected' : ''}>Rahul K.</option>
           <option value="Sneha M." ${lead.owner === 'Sneha M.' ? 'selected' : ''}>Sneha M.</option>
@@ -618,26 +944,29 @@ function openLeadDrawer(id) {
 
     <div class="drawer-actions-section" style="margin-top:auto; flex-direction:row; gap:10px;">
       <button class="btn btn-primary w-100" id="drawerSaveBtn">Save Changes</button>
-      <button class="btn btn-danger" id="drawerDeleteBtn" title="Delete Lead">🗑️</button>
+      ${canDelete ? '<button class="btn btn-danger" id="drawerDeleteBtn" title="Delete Lead">🗑️</button>' : ''}
     </div>
   `;
 
   // Bind edit events inside drawer
   document.getElementById('drawerSaveBtn').addEventListener('click', () => {
     const status = document.getElementById('drawerStatusField').value;
-    const owner = document.getElementById('drawerOwnerField').value;
+    const owner = canReassign ? document.getElementById('drawerOwnerField').value : lead.owner;
     const notes = document.getElementById('drawerNotesField').value;
 
     updateLead(lead.id, { status, owner, notes });
     closeLeadDrawer();
   });
 
-  document.getElementById('drawerDeleteBtn').addEventListener('click', () => {
-    if (confirm(`Are you sure you want to permanently delete lead ${lead.firstName} ${lead.lastName}?`)) {
-      deleteLead(lead.id);
-      closeLeadDrawer();
-    }
-  });
+  const deleteBtn = document.getElementById('drawerDeleteBtn');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', () => {
+      if (confirm(`Are you sure you want to permanently delete lead ${lead.firstName} ${lead.lastName}?`)) {
+        deleteLead(lead.id);
+        closeLeadDrawer();
+      }
+    });
+  }
 
   // Display Drawer
   overlay.classList.add('show');
@@ -686,7 +1015,7 @@ function initSearchAutoComplete() {
       return;
     }
 
-    const matches = allLeads.filter(l => {
+    const matches = getScopedLeads().filter(l => {
       const name = `${l.firstName} ${l.lastName || ''}`.toLowerCase();
       const source = (SOURCE_LABELS[l.source] || '').toLowerCase();
       return name.includes(query) || source.includes(query);
@@ -730,6 +1059,25 @@ function initSearchAutoComplete() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       dropdown.classList.remove('show');
+    }
+  });
+}
+
+/* -----------------------------------------------------------
+   Global Escape handling — closes whatever overlay is topmost
+   (bug fix: Escape previously only closed the search dropdown,
+   not the modal or drawer).
+   ----------------------------------------------------------- */
+function initGlobalEscapeHandler() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const drawer = document.getElementById('leadDrawer');
+    const modal = document.getElementById('leadModal');
+    if (drawer.classList.contains('show')) {
+      closeLeadDrawer();
+    } else if (modal.classList.contains('show')) {
+      modal.classList.remove('show');
+      document.getElementById('leadModalOverlay').classList.remove('show');
     }
   });
 }
@@ -880,44 +1228,132 @@ function initIntegrationsToggles() {
 /* -----------------------------------------------------------
    Router View switcher
    ----------------------------------------------------------- */
+function navigateToView(view) {
+  // Safety net matching the sidebar's own gating — even if a disallowed
+  // nav item were somehow clicked, the view switch itself refuses.
+  const allowedRoles = NAV_ROLE_MAP[view];
+  if (allowedRoles && !allowedRoles.includes(currentRole)) {
+    showToast("You don't have access to that section.");
+    view = 'dashboard';
+  }
+
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  const navItem = document.querySelector(`.nav-item[data-view="${view}"]`);
+  if (navItem) navItem.classList.add('active');
+
+  document.getElementById('sidebar').classList.remove('mobile-open');
+
+  document.querySelectorAll('.view-pane').forEach(pane => pane.classList.remove('active'));
+  const targetPane = document.getElementById(`view-${view}`);
+  if (targetPane) targetPane.classList.add('active');
+
+  if (view === 'dashboard') {
+    recalculateAllData();
+  } else if (view === 'leads') {
+    renderLeadsDirectory();
+  } else if (view === 'notifications') {
+    renderNotifications();
+  } else if (view === 'campaigns') {
+    renderCampaignsView();
+  } else if (view === 'analytics') {
+    renderAnalyticsView();
+  }
+}
+
 function initRouter() {
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
-      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-
-      const view = item.dataset.view;
-
-      // Close mobile navigation drawer if open
-      document.getElementById('sidebar').classList.remove('mobile-open');
-
-      // Hide all panes
-      document.querySelectorAll('.view-pane').forEach(pane => {
-        pane.classList.remove('active');
-      });
-
-      // Show selected pane
-      const targetPane = document.getElementById(`view-${view}`);
-      if (targetPane) {
-        targetPane.classList.add('active');
-      }
-
-      // Special rendering hooks per view
-      if (view === 'dashboard') {
-        recalculateAllData();
-      } else if (view === 'leads') {
-        renderLeadsDirectory();
-      } else if (view === 'notifications') {
-        renderNotifications();
-      }
+      navigateToView(item.dataset.view);
     });
   });
 }
 
 /* -----------------------------------------------------------
-   Notifications Panel triggers
+   Role gating — sidebar nav + feature-level controls
    ----------------------------------------------------------- */
+function applyRoleGating() {
+  // Nav items: views the role can't access are removed from view entirely,
+  // not just grayed out — matching the principle that a role's structure
+  // shouldn't be visible/discoverable if they can't use it.
+  document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+    const view = item.dataset.view;
+    const allowed = NAV_ROLE_MAP[view] || [];
+    item.style.display = allowed.includes(currentRole) ? '' : 'none';
+  });
+
+  const isAdmin = currentRole === 'ADMIN';
+  const isManager = currentRole === 'MANAGER';
+
+  // Campaigns: Admin can create/delete, Manager can only view performance
+  const newCampaignBtn = document.getElementById('newCampaignBtn');
+  if (newCampaignBtn) newCampaignBtn.style.display = isAdmin ? '' : 'none';
+
+  // Integrations: Manager can see connection status but not toggle it —
+  // credentials are an Admin-only concern (Phase 6 §24 of the arch docs)
+  document.querySelectorAll('.integration-card input[type="checkbox"]').forEach(cb => {
+    cb.disabled = !isAdmin;
+  });
+  document.querySelectorAll('.integration-card').forEach(card => {
+    card.style.opacity = isAdmin ? '' : (isManager ? '0.85' : '');
+  });
+
+  // Dashboard header copy adapts per role so it's clear what scope
+  // "the dashboard" actually means right now.
+  const titleEl = document.querySelector('#view-dashboard .page-header h1');
+  const subEl = document.querySelector('#view-dashboard .page-subtitle');
+  if (titleEl && subEl) {
+    if (currentRole === 'ADMIN') {
+      titleEl.textContent = 'Admin Dashboard';
+      subEl.textContent = 'Org-wide pipeline health, updated in real time.';
+    } else if (currentRole === 'MANAGER') {
+      titleEl.textContent = 'Team Dashboard';
+      subEl.textContent = `Pipeline health for your team (${ROLES.MANAGER.team.join(', ')}).`;
+    } else {
+      titleEl.textContent = 'My Dashboard';
+      subEl.textContent = 'Your assigned leads and personal performance.';
+    }
+  }
+
+  // Rep Leaderboard doesn't make sense as a "leaderboard of one" —
+  // Sales Executives see their own numbers via the KPI cards instead.
+  const leaderboardCard = document.getElementById('leaderboardTable')?.closest('.card');
+  if (leaderboardCard) leaderboardCard.style.display = currentRole === 'SALES_EXEC' ? 'none' : '';
+}
+
+function refreshCurrentView() {
+  const activePane = document.querySelector('.view-pane.active');
+  const view = activePane ? activePane.id.replace('view-', '') : 'dashboard';
+  navigateToView(NAV_ROLE_MAP[view]?.includes(currentRole) ? view : 'dashboard');
+}
+
+function initRoleSwitcher() {
+  const select = document.getElementById('roleSwitcher');
+  const nameEl = document.querySelector('.user-name');
+  const roleEl = document.querySelector('.user-role');
+  const avatars = document.querySelectorAll('.avatar, .topbar-avatar');
+  if (!select) return;
+
+  function applyIdentity() {
+    const role = ROLES[currentRole];
+    select.value = currentRole;
+    nameEl.textContent = role.name;
+    roleEl.textContent = role.label;
+    avatars.forEach(a => { a.textContent = role.name.charAt(0); });
+  }
+
+  applyIdentity();
+  applyRoleGating();
+
+  select.addEventListener('change', () => {
+    currentRole = select.value;
+    localStorage.setItem('pipeline_role', currentRole);
+    applyIdentity();
+    applyRoleGating();
+    refreshCurrentView();
+    showToast(`Switched to ${ROLES[currentRole].label} view.`);
+  });
+}
 function initNotifTopbarTrigger() {
   const notifBtn = document.getElementById('notifBtn');
   if (notifBtn) {
@@ -953,6 +1389,90 @@ function showToast(message) {
 }
 
 /* -----------------------------------------------------------
+   Export Leads to Excel/CSV
+   ----------------------------------------------------------- */
+function downloadLeadsExcel() {
+  const searchVal = document.getElementById('leadsDirSearch').value.toLowerCase();
+  const statusVal = document.getElementById('leadsDirStatusFilter').value;
+  const sourceVal = document.getElementById('leadsDirSourceFilter').value;
+  const sortVal = document.getElementById('leadsDirSortFilter').value;
+
+  let filtered = getScopedLeads().filter(l => {
+    const fullName = `${l.firstName} ${l.lastName || ''}`.toLowerCase();
+    const matchesSearch = fullName.includes(searchVal);
+    const matchesStatus = !statusVal || l.status === statusVal;
+    const matchesSource = !sourceVal || l.source === sourceVal;
+    return matchesSearch && matchesStatus && matchesSource;
+  });
+
+  // Sort matching current table view
+  if (sortVal === 'newest') {
+    filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  } else if (sortVal === 'oldest') {
+    filtered.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  } else if (sortVal === 'score-desc') {
+    filtered.sort((a, b) => (b.score || 0) - (a.score || 0));
+  } else if (sortVal === 'score-asc') {
+    filtered.sort((a, b) => (a.score || 0) - (b.score || 0));
+  }
+
+  // Define headers for the spreadsheet
+  const headers = ['Lead ID', 'First Name', 'Last Name', 'Score', 'Source', 'Status', 'Owner', 'Created Date', 'Notes'];
+  
+  // Format each row
+  const rows = filtered.map(l => {
+    // Format dates to a readable local string
+    let createdDateStr = '';
+    if (l.createdAt) {
+      try {
+        createdDateStr = new Date(l.createdAt).toLocaleString();
+      } catch (e) {
+        createdDateStr = l.createdAt;
+      }
+    }
+    
+    // Safely wrap text containing commas, quotes, or newlines
+    const escapeCsv = (val) => {
+      if (val === undefined || val === null) return '';
+      const strVal = String(val);
+      if (strVal.includes(',') || strVal.includes('"') || strVal.includes('\n') || strVal.includes('\r')) {
+        return `"${strVal.replace(/"/g, '""')}"`;
+      }
+      return strVal;
+    };
+
+    return [
+      escapeCsv(l.id),
+      escapeCsv(l.firstName),
+      escapeCsv(l.lastName),
+      l.score !== undefined ? l.score : '',
+      escapeCsv(l.source),
+      escapeCsv(l.status),
+      escapeCsv(l.owner || 'Unassigned'),
+      escapeCsv(createdDateStr),
+      escapeCsv(l.notes)
+    ].join(',');
+  });
+
+  // Combine headers and rows
+  const csvContent = [headers.join(','), ...rows].join('\r\n');
+
+  // Excel UTF-8 Byte Order Mark (BOM) to open cleanly in Excel
+  const BOM = '\uFEFF';
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `pipeline_leads_export_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  showToast(`Exported ${filtered.length} leads successfully.`);
+}
+
+/* -----------------------------------------------------------
    Init Application
    ----------------------------------------------------------- */
 async function init() {
@@ -967,6 +1487,9 @@ async function init() {
   initSettingsActions();
   initIntegrationsToggles();
   initNotifTopbarTrigger();
+  initGlobalEscapeHandler();
+  initCampaigns();
+  initRoleSwitcher();
 
   // Draw Dashboard Metrics
   recalculateAllData();
@@ -999,6 +1522,12 @@ async function init() {
   document.getElementById('leadsDirStatusFilter').addEventListener('change', renderLeadsDirectory);
   document.getElementById('leadsDirSourceFilter').addEventListener('change', renderLeadsDirectory);
   document.getElementById('leadsDirSortFilter').addEventListener('change', renderLeadsDirectory);
+
+  // Leads directory download
+  const downloadExcelBtn = document.getElementById('downloadExcelBtn');
+  if (downloadExcelBtn) {
+    downloadExcelBtn.addEventListener('click', downloadLeadsExcel);
+  }
 
   // Keyboard shortcut: ⌘K / Ctrl+K focuses search
   document.addEventListener('keydown', (e) => {
