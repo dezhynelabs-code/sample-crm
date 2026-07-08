@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light Theme Colors */
+    --color-ink: #111827;
+    --color-slate: #4b5563;
+    --color-mist: #f3f4f6;
+    --color-paper: #ffffff;
+    --color-line: #e5e7eb;
+
+    --color-accent: #4f46e5;
+    --color-accent-hover: #4338ca;
+    --color-accent-subtle: #e0e7ff;
+
+    --status-new: #6366f1;
+    --status-progress: #f59e0b;
+    --status-won: #10b981;
+    --status-lost: #6b7280;
+    --status-danger: #ef4444;
+    --status-danger-subtle: #fee2e2;
+
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-modal: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    --shadow-drawer: -5px 0 25px rgba(0,0,0,0.08);
+
+    --sidebar-width: 260px;
+    --sidebar-collapsed: 72px;
+    --topbar-height: 64px;
+  }
+
+  [data-theme="dark"] {
+    /* Premium Dark Theme Colors */
+    --color-ink: #f8fafc;
+    --color-slate: #94a3b8;
+    --color-mist: #0f172a;
+    --color-paper: #1e293b;
+    --color-line: #334155;
+
+    --color-accent: #6366f1;
+    --color-accent-hover: #818cf8;
+    --color-accent-subtle: #312e81;
+
+    --status-new: #818cf8;
+    --status-progress: #fbbf24;
+    --status-won: #34d399;
+    --status-lost: #94a3b8;
+    --status-danger: #f87171;
+    --status-danger-subtle: #451a1a;
+
+    --shadow-card: 0 4px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+    --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+    --shadow-drawer: -10px 0 35px rgba(0, 0, 0, 0.7);
+  }
+
+  body {
+    @apply bg-mist text-ink antialiased font-sans transition-colors duration-base;
+    font-size: 14px;
+    overflow-x: hidden;
+  }
+}
