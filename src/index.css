@@ -1,0 +1,17 @@
+/*
+ * Tailwind v4 entry point.
+ *
+ * Architectural note: the existing dashboard's visual system (colors,
+ * spacing, radii, shadows, the Score Ring, status-color semantics, dark
+ * mode via [data-theme]) already lives in a mature, hand-tuned stylesheet.
+ * Rewriting ~670 lines of it into Tailwind utility classes on day one of
+ * the migration would risk exactly the kind of subtle pixel/animation
+ * drift the brief says to avoid, for zero functional benefit.
+ *
+ * So: Tailwind is wired in for structure and any *new* UI going forward,
+ * while the legacy stylesheet is imported as-is and remains the source of
+ * truth for every existing visual. Nothing in it was rewritten — only the
+ * file extension/location changed. See src/legacy-dashboard.css.
+ */
+@import "tailwindcss";
+@import "./legacy-dashboard.css";
